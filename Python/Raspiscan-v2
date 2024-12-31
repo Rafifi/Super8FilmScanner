@@ -1,6 +1,6 @@
 # Super8Scanner.py
 #
-# (c)2021 Stuart Pittaway
+# (c)2021 Stuart Pittaway (thank you)
 #
 # The purpose of this program is to digitize Super8 film reel using an inexpensive USB style camera
 # it uses OpenCV to detect the alignment of the images using the film reel sprokets as alignment targets.
