@@ -1,0 +1,104 @@
+# Super8Scanner.py
+#
+# (c)2021 Stuart Pittaway
+#
+# The purpose of this program is to digitize Super8 film reel using an inexpensive USB style camera
+# it uses OpenCV to detect the alignment of the images using the film reel sprokets as alignment targets.
+# It outputs a PNG image per frame, which are vertically aligned, but frame borders and horizontal alignment
+# are not cropped, removed or fixed.  This is the job of a second script to complete this work.
+#
+# Camera images are captured using YUV format, converted to BGR, and processed using OpenCV.
+
+import time
+import cv2
+import numpy as np
+from picamera2 import Picamera2
+import serial
+
+# Initialize Picamera2
+picam2 = Picamera2()
+camera_config = picam2.create_preview_configuration()
+picam2.configure(camera_config)
+picam2.start()
+
+def capture_frame():
+    # Capture a single frame from the camera
+    frame = picam2.capture_array()
+    return cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_I420)
+
+def pointInRect(rect, point):
+    # Checks if a point is inside a rectangle
+    x, y, w, h = rect
+    px, py = point
+    return x <= px <= x + w and y <= py <= y + h
+
+def MarlinWaitForReply(serial_connection):
+    # Reads data from a Marlin-compatible serial device
+    while True:
+        line = serial_connection.readline().decode().strip()
+        if line:
+            print(f"Received: {line}")
+        if line == "ok":
+            break
+
+def MarlinSendCommand(serial_connection, command):
+    # Sends a command to the Marlin-compatible serial device
+    print(f"Sending: {command}")
+    serial_connection.write(f"{command}\n".encode())
+
+def movefilm(serial_connection, steps):
+    # Moves the film by a specified number of steps
+    MarlinSendCommand(serial_connection, f"G91")  # Set to relative positioning
+    MarlinSendCommand(serial_connection, f"G1 E{steps}")  # Move extruder (film stepper)
+    MarlinWaitForReply(serial_connection)
+    MarlinSendCommand(serial_connection, f"G90")  # Set back to absolute positioning
+
+def movereel(serial_connection, steps):
+    # Moves the reel by a specified number of steps
+    MarlinSendCommand(serial_connection, f"G91")  # Set to relative positioning
+    MarlinSendCommand(serial_connection, f"G1 X{steps}")  # Move X axis (reel stepper)
+    MarlinWaitForReply(serial_connection)
+    MarlinSendCommand(serial_connection, f"G90")  # Set back to absolute positioning
+
+def setmarlinlight(serial_connection, state):
+    # Turns the Marlin-controlled light on or off
+    MarlinSendCommand(serial_connection, f"M42 P4 S{255 if state else 0}")  # Control pin 4
+    MarlinWaitForReply(serial_connection)
+
+# Main function
+if __name__ == "__main__":
+    try:
+        print("Starting Super8Scanner...")
+
+        # Example usage
+        serial_connection = serial.Serial("/dev/ttyUSB0", 115200, timeout=1)
+        time.sleep(2)  # Allow serial connection to initialize
+
+        setmarlinlight(serial_connection, True)  # Turn on light
+
+        while True:
+            frame = capture_frame()
+
+            # Process frame (placeholder for your existing OpenCV logic)
+            # Example: Show the frame in a window
+            cv2.imshow("Captured Frame", frame)
+
+            # Example: Move film forward (placeholder for your control logic)
+            movefilm(serial_connection, 10)
+
+            # Check for exit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        setmarlinlight(serial_connection, False)  # Turn off light
+        print("Stopping camera...")
+        picam2.stop()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        picam2.stop()
+
+    finally:
+        cv2.destroyAllWindows()
+        if 'serial_connection' in locals() and serial_connection.is_open:
+            serial_connection.close()
